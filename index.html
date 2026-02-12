@@ -1,714 +1,709 @@
 <!DOCTYPE html>
 <html lang="ko">
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>가롱이의 가계부</title>
+    <title>Garong's Ledger</title>
     
-    <!-- PWA Meta Tags -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="theme-color" content="#a855f7" />
-    <link rel="apple-touch-icon" href="https://picsum.photos/192/192" />
-    
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Fonts: Noto Sans KR -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet" />
-    
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-      body {
-        font-family: 'Noto Sans KR', sans-serif;
-        background-color: #f3f4f6;
-        -webkit-tap-highlight-color: transparent;
-      }
-      /* Hide scrollbar for clean UI */
-      .no-scrollbar::-webkit-scrollbar {
-        display: none;
-      }
-      .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-      }
-      
-      /* Animations */
-      @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-      }
-      .animate-fade-in {
-        animation: fadeIn 0.3s ease-out;
-      }
-      
-      @keyframes slideUp {
-        from { transform: translateY(100%); }
-        to { transform: translateY(0); }
-      }
-      .slide-up-animation {
-        animation: slideUp 0.3s ease-out;
-      }
-
-      .pb-safe {
-        padding-bottom: env(safe-area-inset-bottom);
-      }
+      body { font-family: 'Noto Sans KR', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+      .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+      .animate-bounce-sm { animation: bounce-sm 0.5s infinite; }
+      @keyframes bounce-sm { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+      .modal-enter { animation: modalPop 0.2s ease-out forwards; }
+      @keyframes modalPop { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     </style>
-    
-    <script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.41.0",
-    "react": "https://esm.sh/react@^19.2.4",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/"
-  }
-}
-</script>
-</head>
-<body class="text-slate-800">
-    <div id="app" class="max-w-md mx-auto min-h-screen bg-[#f3f4f6] shadow-2xl overflow-hidden flex flex-col relative">
-        <!-- Header -->
-        <header class="bg-white px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
-            <h1 class="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600">
-                Garong's Ledger
-            </h1>
-            <input 
-              type="date" 
-              id="global-date-picker"
-              class="text-sm font-bold bg-slate-100 px-3 py-1.5 rounded-lg border-none focus:ring-1 focus:ring-purple-500 outline-none text-slate-700 font-sans tracking-tight"
-            />
-        </header>
+  </head>
+  <body>
+    <div id="root"></div>
 
-        <!-- Main Content -->
-        <main class="flex-1 p-4 overflow-y-auto no-scrollbar relative">
-            <!-- Dashboard View -->
-            <div id="view-dashboard" class="view-section space-y-6 pb-20 animate-fade-in">
-                <!-- Content injected by JS -->
-            </div>
+    <script type="text/babel">
+      const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
-            <!-- Planner View -->
-            <div id="view-planner" class="view-section hidden space-y-6 pb-20 animate-fade-in">
-                <!-- Content injected by JS -->
-            </div>
+      // --- CONSTANTS ---
+      const FIXED_LABELS = {
+        loanInterest: '🏦 대출이자', maintenance: '🏢 관리비', gas: '🔥 도시가스',
+        commJiSeung: '📱 통신비(지승)', commGaYoung: '📱 통신비(가영)', commInternet: '🌐 인터넷',
+        insJiSeung: '🛡️ 보험(지승)', insGaYoung: '🛡️ 보험(가영)', insEunWoo: '👶 보험(은우)', insSeonWoo: '👶 보험(선우)',
+        church: '⛪ 교회', allowance: '💸 용돈', savings: '🐖 적금',
+      };
+      
+      const PAYMENT_METHODS = ['현금', '체크카드', '롯데카드', '현대카드', '신한카드', '삼성카드', '우리카드', '국민카드', '농협카드'];
 
-            <!-- Ledger View -->
-            <div id="view-ledger" class="view-section hidden pb-20 animate-fade-in">
-                <!-- Sticky Header for Ledger -->
-                <div class="sticky top-0 bg-[#f3f4f6] pt-2 pb-4 z-10 space-y-3">
-                     <div class="flex bg-slate-200 p-1 rounded-xl">
-                        <button id="ledger-mode-daily" class="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-purple-600 shadow-sm">
-                            일별 보기
-                        </button>
-                        <button id="ledger-mode-monthly" class="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-500">
-                            월별 보기
-                        </button>
-                     </div>
-                     <div class="relative">
-                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-3 text-slate-400"></i>
-                        <input type="text" id="ledger-search" placeholder="내용 검색..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border-none shadow-sm bg-white focus:ring-2 focus:ring-purple-300 outline-none" />
-                     </div>
-                </div>
-                <div id="ledger-stats" class="mb-3 flex justify-end"></div>
-                <div id="ledger-list" class="space-y-3"></div>
-            </div>
+      // --- UTILS ---
+      const addMonths = (dateStr, months) => {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const date = new Date(y, m - 1 + months, d);
+        if (date.getDate() !== d) {
+             date.setDate(0); // Handle month overflow (e.g. Jan 31 -> Feb 28)
+        }
+        const ny = date.getFullYear();
+        const nm = String(date.getMonth() + 1).padStart(2, '0');
+        const nd = String(date.getDate()).padStart(2, '0');
+        return `${ny}-${nm}-${nd}`;
+      };
 
-            <!-- Settings View -->
-            <div id="view-settings" class="view-section hidden space-y-6 pb-20 animate-fade-in">
-                 <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-                    <h3 class="text-slate-800 font-bold text-lg mb-4">데이터 관리</h3>
-                    <div class="space-y-3">
-                       <button id="btn-backup" class="w-full flex items-center justify-between p-4 bg-purple-50 text-purple-700 rounded-xl font-medium hover:bg-purple-100 transition-colors">
-                          <span><i class="fa-solid fa-download mr-2"></i> 전체 데이터 백업 (복사)</span>
-                          <i class="fa-solid fa-chevron-right text-sm opacity-50"></i>
-                       </button>
-                       <button id="btn-restore-open" class="w-full flex items-center justify-between p-4 bg-slate-50 text-slate-700 rounded-xl font-medium hover:bg-slate-100 transition-colors">
-                          <span><i class="fa-solid fa-upload mr-2"></i> 데이터 가져오기 (복구)</span>
-                          <i class="fa-solid fa-chevron-right text-sm opacity-50"></i>
-                       </button>
-                    </div>
+      // --- DB SERVICE ---
+      const DB_NAME = 'GarongLedger_v8_Custom'; 
+      const DB_VERSION = 1;
+
+      const createInitialSheet = (date) => ({
+        date,
+        incomes: { 
+            main: 0, 
+            other: 0, 
+            meal: 0, 
+            overtime: 0, 
+            additional: [] 
+        },
+        fixedExpenses: Object.keys(FIXED_LABELS).reduce((acc, key) => ({ ...acc, [key]: { amount: 0, method: '현금' } }), {}),
+      });
+
+      const dbPromise = new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('transactions')) db.createObjectStore('transactions', { keyPath: 'id' }).createIndex('date', 'date');
+          if (!db.objectStoreNames.contains('dailySheets')) db.createObjectStore('dailySheets', { keyPath: 'date' });
+        };
+        req.onsuccess = (e) => resolve(e.target.result);
+        req.onerror = (e) => reject(e);
+      });
+
+      const dbOps = {
+        getDaySheet: async (date) => {
+          const db = await dbPromise;
+          return new Promise((resolve) => {
+            const tx = db.transaction('dailySheets', 'readonly');
+            const req = tx.objectStore('dailySheets').get(date);
+            req.onsuccess = () => {
+                const sheet = req.result || createInitialSheet(date);
+                if (!sheet.incomes.additional) sheet.incomes.additional = [];
+                resolve(sheet);
+            };
+          });
+        },
+        saveDaySheet: async (sheet) => {
+          const db = await dbPromise;
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction('dailySheets', 'readwrite');
+            const store = tx.objectStore('dailySheets');
+            store.put(sheet);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        },
+        getTransactions: async (month) => {
+          const db = await dbPromise;
+          return new Promise((resolve) => {
+            const tx = db.transaction('transactions', 'readonly');
+            const store = tx.objectStore('transactions');
+            // Safe approach: Get all and filter in JS to avoid index range issues
+            const req = store.getAll();
+            req.onsuccess = () => {
+                const all = req.result || [];
+                const filtered = all.filter(t => t.date.startsWith(month));
+                resolve(filtered);
+            };
+          });
+        },
+        addTransaction: async (txData) => {
+          const db = await dbPromise;
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction('transactions', 'readwrite');
+            const store = tx.objectStore('transactions');
+            store.put(txData);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        },
+        deleteTransaction: async (id) => {
+          console.log("삭제 요청 ID (DB):", id);
+          const db = await dbPromise;
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction('transactions', 'readwrite');
+            const store = tx.objectStore('transactions');
+            store.delete(id);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        },
+        getAllData: async () => {
+            const db = await dbPromise;
+            const [txs, sheets] = await Promise.all([
+                new Promise(r => db.transaction('transactions').objectStore('transactions').getAll().onsuccess = e => r(e.target.result)),
+                new Promise(r => db.transaction('dailySheets').objectStore('dailySheets').getAll().onsuccess = e => r(e.target.result))
+            ]);
+            return { transactions: txs, sheets };
+        },
+        restoreData: async (data) => {
+            const db = await dbPromise;
+            const tx = db.transaction(['transactions', 'dailySheets'], 'readwrite');
+            tx.objectStore('transactions').clear();
+            tx.objectStore('dailySheets').clear();
+            data.transactions.forEach(t => tx.objectStore('transactions').put(t));
+            data.sheets.forEach(s => tx.objectStore('dailySheets').put(s));
+            return new Promise(r => tx.oncomplete = r);
+        },
+        clearAll: async () => {
+            const db = await dbPromise;
+            const tx = db.transaction(['transactions', 'dailySheets'], 'readwrite');
+            tx.objectStore('transactions').clear();
+            tx.objectStore('dailySheets').clear();
+            return new Promise(r => tx.oncomplete = r);
+        }
+      };
+
+      const formatMoney = (n) => n.toLocaleString('ko-KR') + '원';
+
+      // --- COMPONENTS ---
+
+      // 1. DASHBOARD
+      const Dashboard = ({ monthSheets, monthTransactions, currentMonth }) => {
+        const totalBudgetIncome = monthSheets.reduce((acc, s) => {
+            const basic = s.incomes.main + s.incomes.other + s.incomes.meal + s.incomes.overtime;
+            const additional = (s.incomes.additional || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+            return acc + basic + additional;
+        }, 0);
+        
+        const totalBudgetFixed = monthSheets.reduce((acc, s) => acc + Object.values(s.fixedExpenses).reduce((sum, v) => sum + v.amount, 0), 0);
+        const totalActualExpense = monthTransactions.reduce((acc, t) => acc + t.amount, 0);
+        const remaining = totalBudgetIncome - totalBudgetFixed - totalActualExpense;
+
+        return (
+          <div className="space-y-6 animate-fade-in pb-24 flex flex-col h-full">
+            <div className="bg-gradient-to-br from-purple-900 to-indigo-800 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
+               <div className="absolute top-0 right-0 p-4 opacity-10"><i className="fa-solid fa-wallet text-9xl"></i></div>
+               <div className="relative z-10">
+                 <h2 className="text-indigo-200 text-sm font-medium">{currentMonth}월 총 잔액</h2>
+                 <h1 className="text-4xl font-bold tracking-tight mt-1">{formatMoney(remaining)}</h1>
+               </div>
+               <div className="mt-8 grid grid-cols-2 gap-4 relative z-10">
+                 <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                   <div className="text-xs text-indigo-200 mb-1">월 예산(수입)</div>
+                   <div className="font-semibold text-lg">{formatMoney(totalBudgetIncome)}</div>
                  </div>
-            </div>
-        </main>
-
-        <!-- Bottom Navigation -->
-        <nav class="bg-white border-t border-slate-100 flex justify-around items-center py-3 pb-safe sticky bottom-0 z-40">
-            <button class="nav-btn text-purple-600" data-target="dashboard">
-                <i class="fa-solid fa-chart-simple text-xl mb-1"></i>
-                <span class="text-[10px] font-medium">홈</span>
-            </button>
-            <button class="nav-btn text-slate-400" data-target="planner">
-                <i class="fa-solid fa-file-invoice-dollar text-xl mb-1"></i>
-                <span class="text-[10px] font-medium">예산</span>
-            </button>
-            <button class="nav-btn text-slate-400" data-target="ledger">
-                <i class="fa-solid fa-list-check text-xl mb-1"></i>
-                <span class="text-[10px] font-medium">내역</span>
-            </button>
-            <button class="nav-btn text-slate-400" data-target="settings">
-                <i class="fa-solid fa-gear text-xl mb-1"></i>
-                <span class="text-[10px] font-medium">설정</span>
-            </button>
-        </nav>
-
-        <!-- Floating Action Button (Ledger Only) -->
-        <button id="fab-add" class="hidden fixed bottom-24 right-6 w-14 h-14 bg-purple-600 rounded-full text-white shadow-lg shadow-purple-300 flex items-center justify-center text-xl hover:scale-110 transition-transform z-20">
-            <i class="fa-solid fa-plus"></i>
-        </button>
-
-        <!-- Add Transaction Modal -->
-        <div id="modal-add" class="hidden fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center animate-fade-in">
-            <div class="bg-white w-full sm:w-[400px] rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl slide-up-animation">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-xl font-bold text-slate-800">지출 기록하기</h3>
-                    <button id="btn-close-modal" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button>
-                </div>
-                <form id="form-add" class="space-y-4">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs text-slate-500 mb-1">날짜</label>
-                            <input type="date" name="date" class="w-full p-2 bg-slate-50 rounded-lg border-none focus:ring-1 focus:ring-purple-500" required />
-                        </div>
-                        <div>
-                            <label class="block text-xs text-slate-500 mb-1">분류</label>
-                            <input list="category-list" name="category" placeholder="직접 입력 또는 선택" class="w-full p-2 bg-slate-50 rounded-lg border-none focus:ring-1 focus:ring-purple-500" />
-                            <datalist id="category-list">
-                                <option value="식비"></option>
-                                <option value="외식비"></option>
-                                <option value="생활비"></option>
-                                <option value="기타현금지출"></option>
-                            </datalist>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs text-slate-500 mb-1">내용</label>
-                        <input type="text" name="desc" placeholder="예: 점심식사" class="w-full p-2 bg-slate-50 rounded-lg border-none focus:ring-1 focus:ring-purple-500" required />
-                    </div>
-                    <div>
-                        <label class="block text-xs text-slate-500 mb-1">금액</label>
-                        <input type="number" name="amount" placeholder="0" class="w-full p-2 bg-slate-50 rounded-lg border-none focus:ring-1 focus:ring-purple-500 font-bold text-lg" required />
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs text-slate-500 mb-1">결제수단</label>
-                            <select name="paymentMethod" class="w-full p-2 bg-slate-50 rounded-lg border-none focus:ring-1 focus:ring-purple-500">
-                                <option value="Lotte">롯데카드</option>
-                                <option value="Hyundai">현대카드</option>
-                                <option value="Shinhan">신한카드</option>
-                                <option value="Check">체크카드</option>
-                                <option value="Cash">현금</option>
-                            </select>
-                        </div>
-                        <div class="flex items-center pt-5">
-                            <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" name="isInstallment" class="w-5 h-5 accent-purple-600 rounded" />
-                                <span class="text-sm text-slate-700">할부 적용</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs text-slate-500 mb-1">비고 (선택)</label>
-                        <input type="text" name="note" class="w-full p-2 bg-slate-50 rounded-lg border-none focus:ring-1 focus:ring-purple-500" />
-                    </div>
-                    <button type="submit" class="w-full py-3.5 bg-purple-600 text-white rounded-xl font-bold shadow-lg shadow-purple-200 mt-4 active:scale-95 transition-transform">
-                        저장하기
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Restore Modal -->
-        <div id="modal-restore" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-             <div class="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl">
-                 <h3 class="text-lg font-bold mb-2">데이터 복구</h3>
-                 <p className="text-sm text-slate-500 mb-4">백업해둔 JSON 텍스트를 아래에 붙여넣으세요.</p>
-                 <textarea id="restore-input" class="w-full h-40 border border-slate-200 rounded-xl p-3 text-xs bg-slate-50 focus:border-purple-500 outline-none resize-none" placeholder='{"transactions": [], "sheets": [] ...}'></textarea>
-                 <div class="flex gap-2 mt-4">
-                    <button id="btn-restore-cancel" class="flex-1 py-3 text-slate-600 font-medium bg-slate-100 rounded-xl">취소</button>
-                    <button id="btn-restore-confirm" class="flex-1 py-3 text-white font-medium bg-purple-600 rounded-xl">복구하기</button>
+                 <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                   <div className="text-xs text-indigo-200 mb-1">월 지출(실제)</div>
+                   <div className="font-semibold text-lg">{formatMoney(totalBudgetFixed + totalActualExpense)}</div>
                  </div>
+               </div>
+            </div>
+            
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 mt-auto">
+               <h3 className="text-slate-800 font-bold text-lg mb-4 flex items-center gap-2"><i className="fa-solid fa-chart-pie text-purple-600"></i> 지출 분석</h3>
+               <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
+                    <span className="text-slate-500 text-sm">고정 지출 (예산)</span>
+                    <span className="font-bold text-slate-700">{formatMoney(totalBudgetFixed)}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-red-50 rounded-xl border border-red-100">
+                    <span className="text-red-500 text-sm font-medium">변동 지출 (실제)</span>
+                    <span className="font-bold text-red-600">{formatMoney(totalActualExpense)}</span>
+                  </div>
+               </div>
+            </div>
+          </div>
+        );
+      };
+
+      // 2. PLANNER
+      const Planner = ({ sheet, onSave, forceEditMode, transactions, selectedDate }) => {
+        const [isEditing, setIsEditing] = useState(forceEditMode);
+        const [tempSheet, setTempSheet] = useState(sheet);
+
+        useEffect(() => {
+            if (sheet.date !== tempSheet.date) {
+                setTempSheet(sheet);
+            }
+            if (forceEditMode) setIsEditing(true);
+        }, [sheet.date, forceEditMode]);
+
+        useEffect(() => {
+             if(!isEditing) setTempSheet(sheet);
+        }, [sheet]);
+
+        const todayActual = transactions.filter(t => t.date === selectedDate).reduce((sum, t) => sum + t.amount, 0);
+
+        const handleChange = (section, key, field, value) => {
+          setTempSheet(prev => {
+            const next = JSON.parse(JSON.stringify(prev));
+            if (section === 'incomes') {
+              if (field) next.incomes[key][field] = value;
+              else next.incomes[key] = Number(value);
+            } else {
+              if (field) next.fixedExpenses[key][field] = field === 'amount' ? Number(value) : value;
+            }
+            return next;
+          });
+        };
+
+        const handleAddIncomeItem = () => {
+            setTempSheet(prev => ({
+                ...prev,
+                incomes: {
+                    ...prev.incomes,
+                    additional: [...(prev.incomes.additional || []), { id: Date.now(), desc: '', amount: 0 }]
+                }
+            }));
+        };
+
+        const handleAdditionalChange = (id, field, value) => {
+            setTempSheet(prev => ({
+                ...prev,
+                incomes: {
+                    ...prev.incomes,
+                    additional: prev.incomes.additional.map(item => item.id === id ? { ...item, [field]: field === 'amount' ? Number(value) : value } : item)
+                }
+            }));
+        };
+
+        const handleDeleteAdditional = (id) => {
+            setTempSheet(prev => ({
+                ...prev,
+                incomes: {
+                    ...prev.incomes,
+                    additional: prev.incomes.additional.filter(item => item.id !== id)
+                }
+            }));
+        };
+
+        const renderInput = (label, val, section, key) => (
+          <div className="flex justify-between items-center py-3 border-b border-slate-50 last:border-0">
+            <label className="text-slate-600 text-sm font-medium">{label}</label>
+            <input type="number" value={val === 0 ? '' : val} placeholder="0" disabled={!isEditing}
+              onChange={(e) => handleChange(section, key, null, e.target.value)}
+              className="text-right p-2 rounded-lg bg-transparent w-32 font-bold text-slate-800 focus:bg-slate-50 outline-none" />
+          </div>
+        );
+
+        return (
+          <div className="space-y-6 animate-fade-in pb-24">
+            <div className="flex justify-between items-center px-1">
+               <div><h2 className="text-xl font-bold text-slate-800">예산 설정</h2><p className="text-xs text-purple-500 font-bold mt-1">📅 {sheet.date}</p></div>
+               <div>
+                 {isEditing ? (
+                   <><button onClick={() => { setIsEditing(false); setTempSheet(sheet); }} className="px-3 py-2 bg-slate-200 text-slate-600 rounded-lg text-xs font-bold mr-2">취소</button>
+                   <button onClick={() => { onSave(tempSheet); setIsEditing(false); }} className="px-3 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold shadow-lg">저장</button></>
+                 ) : (
+                   <button onClick={() => setIsEditing(true)} className="px-3 py-2 bg-white border border-purple-200 text-purple-600 rounded-lg text-xs font-bold">수정하기</button>
+                 )}
+               </div>
+            </div>
+
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+               <h3 className="text-purple-600 font-bold text-lg mb-2 flex items-center gap-2"><i className="fa-solid fa-coins"></i> 수입 현황</h3>
+               {renderInput('💰 주수입', tempSheet.incomes.main, 'incomes', 'main')}
+               {renderInput('🎁 기타수입', tempSheet.incomes.other, 'incomes', 'other')}
+               {renderInput('🍚 정액급식비', tempSheet.incomes.meal, 'incomes', 'meal')}
+               {renderInput('⏰ 초과수당', tempSheet.incomes.overtime, 'incomes', 'overtime')}
+               
+               {/* Additional Incomes Section */}
+               <div className="mt-4 pt-4 border-t border-slate-100">
+                  <div className="mb-2 text-sm font-medium text-slate-500 flex justify-between items-center">
+                    <span>추가 수입</span>
+                    {isEditing && <button onClick={handleAddIncomeItem} className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded-md font-bold hover:bg-purple-100">+ 항목 추가</button>}
+                  </div>
+                  <div className="space-y-2">
+                    {tempSheet.incomes.additional && tempSheet.incomes.additional.map(item => (
+                        <div key={item.id} className="flex gap-2 items-center animate-fade-in">
+                            <input type="text" value={item.desc} placeholder="항목명" disabled={!isEditing} onChange={(e) => handleAdditionalChange(item.id, 'desc', e.target.value)} className="flex-1 p-2 bg-slate-50 rounded-lg text-sm outline-none focus:ring-1 focus:ring-purple-200" />
+                            <input type="number" value={item.amount === 0 ? '' : item.amount} placeholder="0" disabled={!isEditing} onChange={(e) => handleAdditionalChange(item.id, 'amount', e.target.value)} className="w-24 text-right p-2 bg-slate-50 rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-purple-200" />
+                            {isEditing && <button type="button" onClick={() => handleDeleteAdditional(item.id)} className="w-8 h-8 flex items-center justify-center text-red-400 hover:text-red-600"><i className="fa-solid fa-minus-circle"></i></button>}
+                        </div>
+                    ))}
+                    {(!tempSheet.incomes.additional || tempSheet.incomes.additional.length === 0) && <div className="text-xs text-slate-400 text-center py-2">추가된 수입 항목이 없습니다.</div>}
+                  </div>
+               </div>
+            </div>
+
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+               <h3 className="text-purple-600 font-bold text-lg mb-2 flex items-center gap-2"><i className="fa-solid fa-receipt"></i> 고정 지출 계획</h3>
+               {Object.entries(FIXED_LABELS).map(([k, l]) => (
+                 <div key={k} className="flex justify-between items-center py-3 border-b border-slate-50 last:border-0">
+                   <span className="text-slate-700 font-medium text-sm w-1/3 truncate">{l}</span>
+                   <div className="flex gap-2 flex-1 justify-end">
+                     <input type="number" value={tempSheet.fixedExpenses[k].amount === 0 ? '' : tempSheet.fixedExpenses[k].amount} placeholder="0" disabled={!isEditing}
+                       onChange={(e) => handleChange('fixedExpenses', k, 'amount', e.target.value)}
+                       className="w-24 text-right p-1 rounded text-sm bg-transparent font-bold focus:bg-slate-50 outline-none"/>
+                     <select value={tempSheet.fixedExpenses[k].method} disabled={!isEditing}
+                       onChange={(e) => handleChange('fixedExpenses', k, 'method', e.target.value)}
+                       className={`w-20 text-xs p-1 rounded bg-transparent outline-none text-right ${!isEditing ? 'appearance-none' : 'bg-slate-50'}`}>
+                       {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                     </select>
+                   </div>
+                 </div>
+               ))}
+            </div>
+
+            <div className="border-t border-slate-200 pt-6">
+                <h2 className="text-lg font-bold text-slate-800 mb-3 px-1">오늘의 실제 현황</h2>
+                <div className="bg-slate-800 rounded-3xl p-5 text-white shadow-lg flex justify-between items-center">
+                    <div>
+                        <div className="text-slate-300 text-sm">실제 지출 합계</div>
+                        <div className="text-xs text-slate-500">(내역 탭 합산)</div>
+                    </div>
+                    <span className="text-3xl font-bold">{formatMoney(todayActual)}</span>
+                </div>
+            </div>
+          </div>
+        );
+      };
+
+      // 3. LEDGER
+      const Ledger = ({ transactions, selectedDate, onDelete, onEdit }) => {
+        const [viewMode, setViewMode] = useState('daily');
+        const [searchTerm, setSearchTerm] = useState('');
+
+        useEffect(() => { setViewMode('daily'); }, [selectedDate]);
+
+        const filtered = transactions.filter(t => {
+            if (viewMode === 'daily') return t.date === selectedDate;
+            return true; 
+        }).filter(t => 
+            !searchTerm || t.desc.includes(searchTerm) || t.category.includes(searchTerm)
+        ).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        const total = filtered.reduce((acc, t) => acc + t.amount, 0);
+
+        return (
+          <div className="space-y-4 animate-fade-in pb-24">
+             <div className="sticky top-0 bg-[#f3f4f6] pt-2 pb-2 z-30 space-y-3">
+                <div className="flex bg-slate-200 p-1 rounded-xl shadow-inner">
+                   <button onClick={() => setViewMode('daily')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${viewMode === 'daily' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-500'}`}>일별 ({selectedDate})</button>
+                   <button onClick={() => setViewMode('monthly')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${viewMode === 'monthly' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-500'}`}>월별</button>
+                </div>
+                <div className="relative">
+                   <i className="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-slate-400"></i>
+                   <input type="text" placeholder="내역 검색..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                     className="w-full pl-10 pr-4 py-3 rounded-xl border-none shadow-sm bg-white focus:ring-2 focus:ring-purple-300 outline-none" />
+                </div>
              </div>
+
+             <div className="flex justify-end">
+                {filtered.length > 0 && <div className="text-xs font-medium text-slate-500 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100">{viewMode === 'daily' ? '오늘' : '이번 달'} 합계: <span className="text-purple-600 font-bold ml-1">{formatMoney(total)}</span></div>}
+             </div>
+
+             <div className="space-y-2 min-h-[300px]">
+                {filtered.length === 0 ? (
+                    <div className="text-center py-20 text-slate-400"><i className="fa-solid fa-receipt text-2xl mb-2 block"></i>기록이 없습니다.</div>
+                ) : (
+                    filtered.map(tx => (
+                        <div key={tx.id} onClick={() => onEdit(tx)} className="bg-white px-5 py-4 rounded-xl shadow-sm border-b border-slate-100 flex justify-between items-center cursor-pointer active:bg-slate-50 transition-colors">
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-xs font-bold text-slate-400">{tx.date.slice(5)}</span>
+                                    <span className="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded font-medium">{tx.category}</span>
+                                    {tx.isInstallment && <span className="text-[10px] px-1 bg-red-50 text-red-500 rounded border border-red-100">할부{tx.installmentMonths ? `(${tx.installmentMonths})` : ''}</span>}
+                                </div>
+                                <div className="font-bold text-slate-800 text-sm">{tx.desc}</div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                    <div className="font-bold text-slate-900 text-sm">-{formatMoney(tx.amount)}</div>
+                                    <div className="text-xs text-slate-400">{tx.paymentMethod}</div>
+                                </div>
+                                <button 
+                                    type="button" 
+                                    onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        onDelete(tx.id); 
+                                    }} 
+                                    className="relative w-10 h-10 rounded-full text-slate-300 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors z-20 group"
+                                >
+                                    <i className="fa-solid fa-trash-can text-sm pointer-events-none group-hover:scale-110 transition-transform"></i>
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
+             </div>
+          </div>
+        );
+      };
+
+      const Settings = ({ onBackup, onRestore, onReset }) => (
+        <div className="space-y-6 animate-fade-in pb-24">
+           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+              <h3 className="text-slate-800 font-bold text-lg mb-4">데이터 관리</h3>
+              <div className="space-y-3">
+                 <button type="button" onClick={onBackup} className="w-full flex justify-between p-4 bg-purple-50 text-purple-700 rounded-xl font-medium active:scale-95 transition-transform"><span><i className="fa-solid fa-download mr-2"></i> 백업 (복사)</span></button>
+                 <button type="button" onClick={onRestore} className="w-full flex justify-between p-4 bg-slate-50 text-slate-700 rounded-xl font-medium active:scale-95 transition-transform"><span><i className="fa-solid fa-upload mr-2"></i> 복구 (붙여넣기)</span></button>
+                 <button type="button" onClick={onReset} className="w-full flex justify-between p-4 bg-red-50 text-red-600 rounded-xl font-medium active:scale-95 transition-transform"><span><i className="fa-solid fa-trash mr-2"></i> 초기화</span></button>
+              </div>
+           </div>
         </div>
-    </div>
+      );
 
-    <script type="module">
-        import { GoogleGenAI } from "@google/genai";
+      // --- MAIN APP ---
+      const App = () => {
+        const [tab, setTab] = useState('dashboard');
+        const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+        
+        const [daySheet, setDaySheet] = useState(null);
+        const [monthSheets, setMonthSheets] = useState([]); 
+        const [transactions, setTransactions] = useState([]);
 
-        // --- Data & Types ---
-        const FIXED_LABELS = {
-          loanInterest: '🏦 대출이자',
-          maintenance: '🏢 관리비',
-          gas: '🔥 도시가스',
-          commJiSeung: '📱 통신비(지승)',
-          commGaYoung: '📱 통신비(가영)',
-          commInternet: '🌐 통신비(인터넷)',
-          insJiSeung: '🛡️ 보험료(지승)',
-          insGaYoung: '🛡️ 보험료(가영)',
-          insEunWoo: '👶 보험료(은우)',
-          insSeonWoo: '👶 보험료(선우)',
-          church: '⛪ 교회회비',
-          allowance: '💸 용돈',
-          savings: '🐖 적금',
-        };
+        const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+        const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+        const [restoreText, setRestoreText] = useState('');
+        const [editingTx, setEditingTx] = useState(null);
+        const [installmentChecked, setInstallmentChecked] = useState(false);
+        
+        // New State for Delete Modal
+        const [deleteTargetId, setDeleteTargetId] = useState(null);
 
-        const initialMonthlySheet = (month) => ({
-          month,
-          incomes: {
-            main: 0, other: 0, meal: 0, overtime: 0,
-            free1: { desc: '', amount: 0 },
-            free2: { desc: '', amount: 0 },
-            free3: { desc: '', amount: 0 },
-          },
-          fixedExpenses: {
-            loanInterest: { amount: 0, method: 'Cash' },
-            maintenance: { amount: 0, method: 'Cash' },
-            gas: { amount: 0, method: 'Cash' },
-            commJiSeung: { amount: 0, method: 'Cash' },
-            commGaYoung: { amount: 0, method: 'Cash' },
-            commInternet: { amount: 0, method: 'Cash' },
-            insJiSeung: { amount: 0, method: 'Cash' },
-            insGaYoung: { amount: 0, method: 'Cash' },
-            insEunWoo: { amount: 0, method: 'Cash' },
-            insSeonWoo: { amount: 0, method: 'Cash' },
-            church: { amount: 0, method: 'Cash' },
-            allowance: { amount: 0, method: 'Cash' },
-            savings: { amount: 0, method: 'Cash' },
-          },
-        });
+        const currentMonth = selectedDate.slice(0, 7);
 
-        // --- DB Service (Simplified) ---
-        const DB_NAME = 'GarongLedgerDB';
-        const DB_VERSION = 1;
-        const STORE_TRANSACTIONS = 'transactions';
-        const STORE_MONTHLY = 'monthlySheets';
-
-        class DBService {
-            constructor() {
-                this.db = null;
-            }
-            async open() {
-                if (this.db) return;
-                return new Promise((resolve, reject) => {
-                    const req = indexedDB.open(DB_NAME, DB_VERSION);
-                    req.onupgradeneeded = (e) => {
-                        const db = e.target.result;
-                        if (!db.objectStoreNames.contains(STORE_TRANSACTIONS)) {
-                            db.createObjectStore(STORE_TRANSACTIONS, { keyPath: 'id' }).createIndex('date', 'date', { unique: false });
-                        }
-                        if (!db.objectStoreNames.contains(STORE_MONTHLY)) {
-                            db.createObjectStore(STORE_MONTHLY, { keyPath: 'month' });
-                        }
-                    };
-                    req.onsuccess = (e) => { this.db = e.target.result; resolve(); };
-                    req.onerror = (e) => reject(e);
-                });
-            }
-            async getMonthlySheet(month) {
-                await this.open();
-                return new Promise((resolve) => {
-                    const req = this.db.transaction(STORE_MONTHLY, 'readonly').objectStore(STORE_MONTHLY).get(month);
-                    req.onsuccess = () => resolve(req.result || initialMonthlySheet(month));
-                    req.onerror = () => resolve(initialMonthlySheet(month));
-                });
-            }
-            async saveMonthlySheet(sheet) {
-                await this.open();
-                return new Promise((resolve) => {
-                    const req = this.db.transaction(STORE_MONTHLY, 'readwrite').objectStore(STORE_MONTHLY).put(sheet);
-                    req.onsuccess = () => resolve();
-                });
-            }
-            async getTransactions(month) {
-                await this.open();
-                return new Promise((resolve) => {
-                    const index = this.db.transaction(STORE_TRANSACTIONS, 'readonly').objectStore(STORE_TRANSACTIONS).index('date');
-                    const range = IDBKeyRange.bound(`${month}-01`, `${month}-31`);
-                    const req = index.getAll(range);
-                    req.onsuccess = () => resolve(req.result || []);
-                    req.onerror = () => resolve([]);
-                });
-            }
-            async addTransaction(tx) {
-                await this.open();
-                return new Promise((resolve) => {
-                    this.db.transaction(STORE_TRANSACTIONS, 'readwrite').objectStore(STORE_TRANSACTIONS).put(tx).onsuccess = () => resolve();
-                });
-            }
-            async deleteTransaction(id) {
-                await this.open();
-                return new Promise((resolve) => {
-                    this.db.transaction(STORE_TRANSACTIONS, 'readwrite').objectStore(STORE_TRANSACTIONS).delete(id).onsuccess = () => resolve();
-                });
-            }
-            async getAllData() {
-                await this.open();
-                const [transactions, sheets] = await Promise.all([
-                    new Promise(r => this.db.transaction(STORE_TRANSACTIONS).objectStore(STORE_TRANSACTIONS).getAll().onsuccess = e => r(e.target.result)),
-                    new Promise(r => this.db.transaction(STORE_MONTHLY).objectStore(STORE_MONTHLY).getAll().onsuccess = e => r(e.target.result))
+        // Force a reload of all data
+        const loadData = useCallback(async () => {
+            try {
+                const [dSheet, allData, txs] = await Promise.all([
+                    dbOps.getDaySheet(selectedDate),
+                    dbOps.getAllData(), 
+                    dbOps.getTransactions(currentMonth)
                 ]);
-                return { transactions, sheets };
+                const mSheets = allData.sheets.filter(s => s.date.startsWith(currentMonth));
+                
+                setDaySheet(dSheet);
+                setMonthSheets(mSheets);
+                setTransactions(txs);
+            } catch (err) {
+                console.error("Failed to load data", err);
             }
-            async restoreData(data) {
-                await this.open();
-                const tx = this.db.transaction([STORE_TRANSACTIONS, STORE_MONTHLY], 'readwrite');
-                tx.objectStore(STORE_TRANSACTIONS).clear();
-                tx.objectStore(STORE_MONTHLY).clear();
-                data.transactions.forEach(t => tx.objectStore(STORE_TRANSACTIONS).put(t));
-                data.sheets.forEach(s => tx.objectStore(STORE_MONTHLY).put(s));
-                return new Promise(r => tx.oncomplete = () => r());
-            }
-        }
-        const db = new DBService();
+        }, [selectedDate, currentMonth]);
 
-        // --- Application State ---
-        let state = {
-            currentTab: 'dashboard',
-            selectedDate: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
-            sheet: null,
-            transactions: [],
-            ledgerViewMode: 'daily', // 'daily' or 'monthly'
-            ledgerSearch: '',
+        useEffect(() => { loadData(); }, [loadData]);
+
+        const isBudgetEmpty = daySheet ? (daySheet.incomes.main + daySheet.incomes.other === 0 && daySheet.incomes.meal === 0) : false;
+
+        const handleSaveSheet = async (newSheet) => {
+            await dbOps.saveDaySheet(newSheet);
+            await loadData();
         };
 
-        // --- Helper Functions ---
-        const formatMoney = (n) => n.toLocaleString('ko-KR') + '원';
-        const getMonth = (dateStr) => dateStr.slice(0, 7);
-
-        // --- Render Functions ---
-
-        async function init() {
-            // Set initial date in picker
-            document.getElementById('global-date-picker').value = state.selectedDate;
-            await loadData();
-            setupEventListeners();
-        }
-
-        async function loadData() {
-            const month = getMonth(state.selectedDate);
-            state.sheet = await db.getMonthlySheet(month);
-            state.transactions = await db.getTransactions(month);
-            renderApp();
-        }
-
-        function renderApp() {
-            // Toggle Views
-            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
-            document.getElementById(`view-${state.currentTab}`).classList.remove('hidden');
-
-            // Toggle Nav Active State
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                const isActive = btn.dataset.target === state.currentTab;
-                btn.className = `nav-btn flex flex-col items-center space-y-1 w-16 transition-colors ${isActive ? 'text-purple-600' : 'text-slate-400'}`;
-                const icon = btn.querySelector('i');
-                if (isActive) icon.classList.add('animate-bounce-short');
-                else icon.classList.remove('animate-bounce-short');
-            });
-
-            // FAB visibility
-            if (state.currentTab === 'ledger') document.getElementById('fab-add').classList.remove('hidden');
-            else document.getElementById('fab-add').classList.add('hidden');
-
-            // Render specific views
-            if (state.currentTab === 'dashboard') renderDashboard();
-            if (state.currentTab === 'planner') renderPlanner();
-            if (state.currentTab === 'ledger') renderLedger();
-        }
-
-        function renderDashboard() {
-            const { sheet, transactions } = state;
-            // Calculate Stats
-            let totalIncome = sheet.incomes.main + sheet.incomes.other + sheet.incomes.meal + sheet.incomes.overtime + 
-                              sheet.incomes.free1.amount + sheet.incomes.free2.amount + sheet.incomes.free3.amount;
+        const handleAddTransaction = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
             
-            let totalFixed = 0;
-            const fixedByCard = { Lotte: 0, Hyundai: 0, Shinhan: 0, Cash: 0, Check: 0 };
-            Object.values(sheet.fixedExpenses).forEach(item => {
-                totalFixed += item.amount;
-                if (fixedByCard[item.method] !== undefined) fixedByCard[item.method] += item.amount;
-            });
-
-            let totalVariable = 0;
-            const variableByCard = { Lotte: 0, Hyundai: 0, Shinhan: 0, Cash: 0, Check: 0 };
-            transactions.forEach(t => {
-                totalVariable += t.amount;
-                if (variableByCard[t.paymentMethod] !== undefined) variableByCard[t.paymentMethod] += t.amount;
-            });
-
-            const totalExpense = totalFixed + totalVariable;
-            const disposableIncome = totalIncome - totalFixed;
-            const remainingBalance = disposableIncome - totalVariable;
+            const originDate = fd.get('date');
+            const originAmount = Number(fd.get('amount'));
+            const isInstallment = fd.get('isInstallment') === 'on';
+            const months = isInstallment ? (Number(fd.get('installmentMonths')) || 1) : 1;
+            const baseDesc = fd.get('desc');
+            const formTxId = fd.get('txId');
             
-            // Render HTML
-            const container = document.getElementById('view-dashboard');
-            container.innerHTML = `
-                <div class="bg-gradient-to-br from-purple-600 to-indigo-600 rounded-3xl p-6 text-white shadow-lg shadow-purple-200">
-                    <h2 class="text-purple-100 text-sm mb-1 font-medium">이번 달 남은 돈</h2>
-                    <div class="text-4xl font-bold mb-6 tracking-tight">${formatMoney(remainingBalance)}</div>
-                    <div class="grid grid-cols-2 gap-4 bg-white/10 rounded-2xl p-4 backdrop-blur-sm">
-                       <div><div class="text-xs text-purple-200 mb-1">총 수입</div><div class="font-semibold text-lg">${formatMoney(totalIncome)}</div></div>
-                       <div class="text-right"><div class="text-xs text-purple-200 mb-1">총 지출</div><div class="font-semibold text-lg">${formatMoney(totalExpense)}</div></div>
-                    </div>
-                </div>
+            // Enforce ID as String
+            const baseId = formTxId ? String(formTxId) : (String(Date.now()) + "_" + Math.random().toString(36).substr(2, 5));
 
-                <!-- AI Coach -->
-                <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden">
-                    <div class="absolute top-0 right-0 p-4 opacity-10 text-purple-600 text-6xl"><i class="fa-solid fa-robot"></i></div>
-                    <h3 class="text-purple-600 font-bold text-lg mb-3 flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles"></i> 가롱이 AI 코치</h3>
-                    <div id="ai-content" class="text-center py-6">
-                        <p class="text-slate-500 text-sm mb-4">내 소비 습관, AI에게 점검 받아볼까요?</p>
-                        <button id="btn-ai-analyze" class="bg-purple-100 text-purple-700 font-bold py-3 px-6 rounded-xl hover:bg-purple-200 transition-colors">지출 분석 시작하기</button>
-                    </div>
-                </div>
+            // Ensure we wait for the DB operations to complete
+            if (months > 1) {
+                const monthlyAmount = Math.floor(originAmount / months);
+                const remainder = originAmount - (monthlyAmount * months);
+                const promises = [];
 
-                <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-                    <h3 class="text-slate-800 font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-chart-pie text-purple-500"></i> 지출 분석</h3>
-                    <div class="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
-                        <div><div class="text-xs text-slate-500">소비가능 금액 (수입 - 고정)</div><div class="text-slate-900 font-bold">${formatMoney(disposableIncome)}</div></div>
-                        <div class="text-right"><div class="text-xs text-slate-500">현재 변동 지출</div><div class="text-red-500 font-bold">-${formatMoney(totalVariable)}</div></div>
-                    </div>
-                </div>
-            `;
-
-            // Attach AI Event
-            document.getElementById('btn-ai-analyze')?.addEventListener('click', async () => {
-                const aiContent = document.getElementById('ai-content');
-                if (!process.env.API_KEY) {
-                    alert("API Key가 설정되지 않았습니다. 코드에서 process.env.API_KEY를 설정해주세요.");
-                    return;
+                for (let i = 0; i < months; i++) {
+                    const tx = {
+                        id: String(i === 0 ? baseId : `${baseId}_${i}`),
+                        date: addMonths(originDate, i),
+                        category: fd.get('category'),
+                        desc: `${baseDesc} (${i + 1}/${months})`,
+                        amount: i === 0 ? monthlyAmount + remainder : monthlyAmount,
+                        paymentMethod: fd.get('paymentMethod'),
+                        isInstallment: true,
+                        installmentMonths: months
+                    };
+                    promises.push(dbOps.addTransaction(tx));
                 }
-                
-                aiContent.innerHTML = `<div class="py-4 animate-pulse"><i class="fa-solid fa-calculator text-2xl mb-2 text-purple-400"></i><p>가롱이가 장부를 꼼꼼히 살펴보고 있어요...</p></div>`;
-                
-                try {
-                    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                    const expenseSummary = transactions.slice(0, 30).map(t => `- ${t.date} ${t.category} (${t.desc}): ${t.amount}원`).join('\n');
-                    const prompt = `역할: 가계부 코치. 데이터: 수입 ${totalIncome}, 고정지출 ${totalFixed}, 변동지출 ${totalVariable}, 잔액 ${remainingBalance}. 최근지출: ${expenseSummary}. 요청: 1.칭찬 2.줄일항목 3.팁. 300자이내, 친한언니말투.`;
-                    
-                    const result = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
-                    const text = result.text;
-                    
-                    aiContent.innerHTML = `
-                        <div class="bg-purple-50 rounded-xl p-4 text-slate-700 text-sm leading-relaxed whitespace-pre-wrap text-left">${text}</div>
-                    `;
-                } catch(e) {
-                    console.error(e);
-                    aiContent.innerHTML = `<p class="text-red-500 text-sm">오류가 발생했습니다.</p><button id="btn-ai-retry" class="mt-2 text-xs underline">다시 시도</button>`;
-                    document.getElementById('btn-ai-retry').onclick = () => renderDashboard(); // simple retry via re-render
-                }
-            });
-        }
-
-        function renderPlanner() {
-            const sheet = state.sheet;
-            const container = document.getElementById('view-planner');
-            
-            const renderInputRow = (label, value, key, type='incomes') => `
-                <div class="flex items-center justify-between py-2">
-                  <label class="text-slate-600 text-sm font-medium">${label}</label>
-                  <input type="number" value="${value === 0 ? '' : value}" placeholder="0" data-section="${type}" data-key="${key}" class="planner-input w-32 text-right p-2 rounded-lg border border-slate-200 focus:border-purple-500 focus:outline-none text-slate-800 bg-slate-50"/>
-                </div>`;
-
-            const renderFixedRow = (key, label, item) => `
-                <div class="bg-slate-50 p-3 rounded-xl mb-3">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-slate-700 font-medium text-sm">${label}</span>
-                        <input type="number" placeholder="0" value="${item.amount === 0 ? '' : item.amount}" data-section="fixedExpenses" data-key="${key}" data-field="amount" class="planner-input w-28 text-right bg-white border border-slate-200 rounded p-1 text-sm"/>
-                    </div>
-                    <div class="flex justify-end">
-                        <select data-section="fixedExpenses" data-key="${key}" data-field="method" class="planner-select text-xs p-1 bg-white border border-slate-200 rounded text-slate-500">
-                            ${['Lotte','Hyundai','Shinhan','Cash','Check'].map(m => `<option value="${m}" ${item.method === m ? 'selected' : ''}>${m === 'Cash' ? '현금' : m+'카드'}</option>`).join('')}
-                        </select>
-                    </div>
-                </div>`;
-
-            container.innerHTML = `
-                <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-                    <h3 class="text-purple-600 font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-coins"></i> 수입 설정</h3>
-                    <div class="space-y-1 divide-y divide-slate-50">
-                        ${renderInputRow('💰 주수입', sheet.incomes.main, 'main')}
-                        ${renderInputRow('🎁 기타수입', sheet.incomes.other, 'other')}
-                        ${renderInputRow('🍚 정액급식비', sheet.incomes.meal, 'meal')}
-                        ${renderInputRow('⏰ 초과수당', sheet.incomes.overtime, 'overtime')}
-                        ${[1,2,3].map(i => `
-                            <div class="flex items-center gap-2 py-2">
-                                <span class="text-slate-400">✨</span>
-                                <input type="text" placeholder="자유입력 ${i}" value="${sheet.incomes['free'+i].desc}" data-section="incomes" data-key="free${i}" data-field="desc" class="planner-input flex-1 text-sm p-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-purple-500 focus:outline-none"/>
-                                <input type="number" placeholder="0" value="${sheet.incomes['free'+i].amount === 0 ? '' : sheet.incomes['free'+i].amount}" data-section="incomes" data-key="free${i}" data-field="amount" class="planner-input w-24 text-right p-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-purple-500 focus:outline-none"/>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-                <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-                    <h3 class="text-purple-600 font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-receipt"></i> 고정 지출 설정</h3>
-                    <div>
-                        ${Object.entries(FIXED_LABELS).map(([key, label]) => renderFixedRow(key, label, sheet.fixedExpenses[key])).join('')}
-                    </div>
-                </div>
-            `;
-
-            // Attach listeners to inputs for auto-save
-            container.querySelectorAll('.planner-input, .planner-select').forEach(el => {
-                el.addEventListener('change', async (e) => {
-                    const section = e.target.dataset.section;
-                    const key = e.target.dataset.key;
-                    const field = e.target.dataset.field;
-                    const val = e.target.value;
-
-                    if (section === 'incomes') {
-                        if (field) state.sheet.incomes[key][field] = field === 'amount' ? Number(val) : val;
-                        else state.sheet.incomes[key] = Number(val);
-                    } else if (section === 'fixedExpenses') {
-                        state.sheet.fixedExpenses[key][field] = field === 'amount' ? Number(val) : val;
-                    }
-                    await db.saveMonthlySheet(state.sheet);
-                });
-            });
-        }
-
-        function renderLedger() {
-            const listContainer = document.getElementById('ledger-list');
-            const statsContainer = document.getElementById('ledger-stats');
-            
-            // Filter
-            let filtered = state.transactions.filter(t => t.date.startsWith(getMonth(state.selectedDate)));
-            if (state.ledgerViewMode === 'daily') {
-                filtered = filtered.filter(t => t.date === state.selectedDate);
-                // Update toggle buttons visual
-                document.getElementById('ledger-mode-daily').className = "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-purple-600 shadow-sm";
-                document.getElementById('ledger-mode-monthly').className = "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-500";
+                await Promise.all(promises);
             } else {
-                 document.getElementById('ledger-mode-daily').className = "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-500";
-                 document.getElementById('ledger-mode-monthly').className = "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-purple-600 shadow-sm";
-            }
-            
-            if (state.ledgerSearch) {
-                const term = state.ledgerSearch;
-                filtered = filtered.filter(t => t.desc.includes(term) || t.category.includes(term));
-            }
-            
-            filtered.sort((a,b) => new Date(b.date) - new Date(a.date));
-
-            // Stats
-            const total = filtered.reduce((acc, curr) => acc + curr.amount, 0);
-            if (filtered.length > 0) {
-                statsContainer.innerHTML = `<span class="text-xs font-medium text-slate-500 bg-white px-2 py-1 rounded-lg border border-slate-100">합계: <span class="text-purple-600 font-bold">${formatMoney(total)}</span></span>`;
-            } else {
-                statsContainer.innerHTML = '';
-            }
-
-            // List
-            if (filtered.length === 0) {
-                listContainer.innerHTML = `<div class="text-center py-20 text-slate-400"><i class="fa-regular fa-folder-open text-3xl mb-2"></i><p>${state.ledgerViewMode === 'daily' ? '오늘의 기록이 없습니다.' : '기록이 없습니다.'}</p></div>`;
-            } else {
-                listContainer.innerHTML = filtered.map(tx => `
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
-                        <div>
-                            <div class="text-xs text-slate-400 mb-1">${tx.date} | <span class="text-purple-500 font-medium">${tx.category}</span></div>
-                            <div class="font-bold text-slate-800 text-lg">${tx.desc}</div>
-                            <div class="flex gap-2 text-xs mt-1 text-slate-500">
-                                <span class="bg-slate-100 px-1.5 py-0.5 rounded">${tx.paymentMethod}</span>
-                                ${tx.isInstallment ? '<span class="bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">할부</span>' : ''}
-                                ${tx.note ? `<span>${tx.note}</span>` : ''}
-                            </div>
-                        </div>
-                        <div class="text-right">
-                            <div class="font-bold text-slate-900 mb-2">-${formatMoney(tx.amount)}</div>
-                            <button class="btn-delete-tx text-slate-300 hover:text-red-400 transition-colors" data-id="${tx.id}"><i class="fa-solid fa-trash-can"></i></button>
-                        </div>
-                    </div>
-                `).join('');
-                
-                // Delete listeners
-                document.querySelectorAll('.btn-delete-tx').forEach(btn => {
-                    btn.addEventListener('click', async (e) => {
-                        if (confirm('삭제하시겠습니까?')) {
-                            const id = e.currentTarget.dataset.id;
-                            await db.deleteTransaction(id);
-                            loadData();
-                        }
-                    });
-                });
-            }
-        }
-
-        function setupEventListeners() {
-            // Global Date Picker
-            document.getElementById('global-date-picker').addEventListener('change', (e) => {
-                state.selectedDate = e.target.value;
-                state.ledgerViewMode = 'daily'; // Reset to daily on date change
-                loadData();
-            });
-
-            // Navigation
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    state.currentTab = btn.dataset.target;
-                    renderApp();
-                });
-            });
-
-            // Ledger Toggles
-            document.getElementById('ledger-mode-daily').addEventListener('click', () => { state.ledgerViewMode = 'daily'; renderLedger(); });
-            document.getElementById('ledger-mode-monthly').addEventListener('click', () => { state.ledgerViewMode = 'monthly'; renderLedger(); });
-            document.getElementById('ledger-search').addEventListener('input', (e) => { state.ledgerSearch = e.target.value; renderLedger(); });
-
-            // FAB
-            document.getElementById('fab-add').addEventListener('click', () => {
-                document.querySelector('input[name="date"]').value = state.selectedDate;
-                document.getElementById('modal-add').classList.remove('hidden');
-            });
-
-            // Add Modal Close
-            document.getElementById('btn-close-modal').addEventListener('click', () => {
-                 document.getElementById('modal-add').classList.add('hidden');
-            });
-
-            // Add Form Submit
-            document.getElementById('form-add').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const newTx = {
-                    id: Date.now().toString(),
-                    date: formData.get('date'),
-                    category: formData.get('category') || '기타현금지출',
-                    desc: formData.get('desc'),
-                    amount: Number(formData.get('amount')),
-                    paymentMethod: formData.get('paymentMethod'),
-                    isInstallment: formData.get('isInstallment') === 'on',
-                    note: formData.get('note')
+                const tx = {
+                    id: String(baseId),
+                    date: originDate,
+                    category: fd.get('category'),
+                    desc: baseDesc,
+                    amount: originAmount,
+                    paymentMethod: fd.get('paymentMethod'),
+                    isInstallment: isInstallment,
+                    installmentMonths: months
                 };
-                await db.addTransaction(newTx);
-                e.target.reset();
-                document.getElementById('modal-add').classList.add('hidden');
-                loadData();
-            });
+                await dbOps.addTransaction(tx);
+            }
+            
+            setIsAddModalOpen(false);
+            setEditingTx(null);
+            
+            // Critical: reload data after DB write to sync Budget page and Ledger list
+            await loadData();
 
-            // Settings: Backup
-            document.getElementById('btn-backup').addEventListener('click', async () => {
-                const data = await db.getAllData();
-                await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-                alert('데이터가 클립보드에 복사되었습니다.');
-            });
+            if (originDate !== selectedDate && months === 1) setSelectedDate(originDate);
+        };
 
-            // Settings: Restore
-            document.getElementById('btn-restore-open').addEventListener('click', () => document.getElementById('modal-restore').classList.remove('hidden'));
-            document.getElementById('btn-restore-cancel').addEventListener('click', () => document.getElementById('modal-restore').classList.add('hidden'));
-            document.getElementById('btn-restore-confirm').addEventListener('click', async () => {
-                try {
-                    const json = document.getElementById('restore-input').value;
-                    const data = JSON.parse(json);
-                    if (confirm('데이터가 덮어씌워집니다. 진행하시겠습니까?')) {
-                        await db.restoreData(data);
-                        location.reload();
-                    }
-                } catch(e) { alert('올바르지 않은 JSON입니다.'); }
-            });
-        }
+        const openDeleteModal = (rawId) => {
+            setDeleteTargetId(String(rawId));
+        };
 
-        // Initialize App
-        init();
+        const confirmDelete = async () => {
+            if (!deleteTargetId) return;
+            const id = deleteTargetId;
+            
+            // Optimistic UI Update: Remove immediately from state
+            setTransactions(prev => prev.filter(t => String(t.id) !== id));
+            setDeleteTargetId(null); // Close modal immediately
+
+            try {
+                await dbOps.deleteTransaction(id);
+                // Background sync to ensure consistency
+                await loadData();
+            } catch(err) {
+                console.error("삭제 실패", err);
+                alert("삭제 중 오류가 발생했습니다.");
+                await loadData(); // Revert on failure
+            }
+        };
+
+        const handleBackup = async () => {
+            try {
+                const data = await dbOps.getAllData();
+                await navigator.clipboard.writeText(JSON.stringify(data));
+                alert("클립보드에 복사되었습니다! 메모장에 붙여넣기 하세요.");
+            } catch (err) {
+                alert("복사 실패. 보안 설정이나 브라우저를 확인하세요.");
+            }
+        };
+
+        const handleRestore = async () => {
+            try {
+                if(!restoreText) return;
+                await dbOps.restoreData(JSON.parse(restoreText));
+                alert("복구 완료!");
+                window.location.reload();
+            } catch(e) { alert("데이터 형식이 올바르지 않습니다."); }
+        };
+
+        const openAddModal = () => {
+            setEditingTx(null);
+            setInstallmentChecked(false);
+            setIsAddModalOpen(true);
+        };
+
+        const openEditModal = (tx) => {
+            setEditingTx(tx);
+            setInstallmentChecked(tx.isInstallment);
+            setIsAddModalOpen(true);
+        };
+
+        if (!daySheet) return <div className="flex h-screen items-center justify-center text-purple-600 bg-[#f3f4f6]"><i className="fa-solid fa-circle-notch fa-spin text-3xl"></i></div>;
+
+        return (
+          <div className="max-w-md mx-auto min-h-screen bg-[#f3f4f6] shadow-2xl overflow-hidden flex flex-col relative font-sans">
+             <header className="bg-white px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
+                <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600 cursor-pointer" onClick={() => window.location.reload()}>Garong's Ledger</h1>
+                <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="text-sm font-bold bg-slate-100 px-3 py-1.5 rounded-lg border-none outline-none text-slate-700" />
+             </header>
+
+             <main className="flex-1 p-4 overflow-y-auto no-scrollbar relative flex flex-col">
+                {tab === 'dashboard' && <Dashboard monthSheets={monthSheets} monthTransactions={transactions} currentMonth={currentMonth} />}
+                {tab === 'planner' && <Planner sheet={daySheet} onSave={handleSaveSheet} forceEditMode={isBudgetEmpty} transactions={transactions} selectedDate={selectedDate} />}
+                {tab === 'ledger' && <Ledger transactions={transactions} selectedDate={selectedDate} onDelete={openDeleteModal} onEdit={openEditModal} />}
+                {tab === 'settings' && <Settings onBackup={handleBackup} onRestore={() => setIsRestoreModalOpen(true)} onReset={async () => { if(confirm("초기화?")) { await dbOps.clearAll(); window.location.reload(); } }} />}
+             </main>
+
+             <nav className="bg-white border-t border-slate-100 flex justify-around items-center py-3 pb-safe sticky bottom-0 z-40">
+                {['dashboard', 'planner', 'ledger', 'settings'].map(t => (
+                    <button key={t} onClick={() => setTab(t)} className={`nav-btn flex flex-col items-center w-16 transition-colors ${tab === t ? 'text-purple-600' : 'text-slate-400'}`}>
+                        <i className={`fa-solid ${t==='dashboard'?'fa-chart-simple':t==='planner'?'fa-file-invoice-dollar':t==='ledger'?'fa-list-check':'fa-gear'} text-xl mb-1 ${tab===t?'animate-bounce-sm':''}`}></i>
+                        <span className="text-[10px] font-medium">{t==='dashboard'?'홈':t==='planner'?'예산':t==='ledger'?'내역':'설정'}</span>
+                    </button>
+                ))}
+             </nav>
+
+             {tab === 'ledger' && <button onClick={openAddModal} className="fixed bottom-24 right-6 w-14 h-14 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full text-white shadow-lg flex items-center justify-center text-xl hover:scale-110 active:scale-95 transition-all z-50 animate-fade-in"><i className="fa-solid fa-plus"></i></button>}
+
+             {isAddModalOpen && (
+                <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center animate-fade-in">
+                   <div className="bg-white w-full sm:w-[400px] rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl relative">
+                      <div className="flex justify-between items-center mb-6">
+                         <h3 className="text-xl font-bold text-slate-800">{editingTx ? '지출 수정' : '지출 기록'}</h3>
+                         <button onClick={() => setIsAddModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500"><i className="fa-solid fa-xmark"></i></button>
+                      </div>
+                      <form onSubmit={handleAddTransaction} className="space-y-4">
+                         <input type="hidden" name="txId" defaultValue={editingTx?.id} />
+                         <input type="date" name="date" defaultValue={editingTx?.date || selectedDate} required className="w-full p-3 bg-slate-50 rounded-xl outline-none font-bold" />
+                         <div className="flex gap-2">
+                            <input list="category-list" name="category" placeholder="분류 (식비)" defaultValue={editingTx?.category} required className="w-full p-3 bg-slate-50 rounded-xl outline-none" />
+                            <datalist id="category-list">{['식비','외식비','생활비','교통비','쇼핑','의료비','경조사','불필요지출'].map(c=><option key={c} value={c}/>)}</datalist>
+                         </div>
+                         <input type="text" name="desc" placeholder="내용" defaultValue={editingTx?.desc} required className="w-full p-3 bg-slate-50 rounded-xl outline-none" />
+                         <input type="number" name="amount" placeholder="금액" defaultValue={editingTx?.amount} required className="w-full p-3 bg-slate-50 rounded-xl outline-none font-bold text-lg" />
+                         <div className="grid grid-cols-2 gap-2">
+                            <select name="paymentMethod" defaultValue={editingTx?.paymentMethod || '체크카드'} className="w-full p-3 bg-slate-50 rounded-xl outline-none">
+                                {PAYMENT_METHODS.map(m=><option key={m} value={m}>{m}</option>)}
+                            </select>
+                            <div className="flex items-center gap-2 border border-slate-200 rounded-xl bg-white px-3">
+                                <label className="flex items-center gap-2 cursor-pointer flex-1">
+                                    <input type="checkbox" name="isInstallment" checked={installmentChecked} onChange={(e) => setInstallmentChecked(e.target.checked)} className="w-4 h-4 text-purple-600 rounded" />
+                                    <span className="text-sm font-medium">할부</span>
+                                </label>
+                                {installmentChecked && (
+                                    <input type="number" name="installmentMonths" placeholder="개월" defaultValue={editingTx?.installmentMonths} className="w-12 text-sm border-b border-purple-200 outline-none text-center bg-transparent" />
+                                )}
+                            </div>
+                         </div>
+                         <button type="submit" className="w-full py-4 bg-purple-600 text-white rounded-xl font-bold shadow-lg mt-2">저장하기</button>
+                      </form>
+                   </div>
+                </div>
+             )}
+
+             {isRestoreModalOpen && (
+                <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 animate-fade-in">
+                   <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl">
+                      <h3 className="text-lg font-bold mb-2">데이터 복구</h3>
+                      <textarea className="w-full h-40 border border-slate-200 rounded-xl p-3 text-xs bg-slate-50 outline-none resize-none" placeholder='데이터 붙여넣기' value={restoreText} onChange={e => setRestoreText(e.target.value)}></textarea>
+                      <div className="flex gap-2 mt-4">
+                         <button onClick={() => setIsRestoreModalOpen(false)} className="flex-1 py-3 bg-slate-100 rounded-xl font-medium">취소</button>
+                         <button onClick={handleRestore} className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-medium">복구하기</button>
+                      </div>
+                   </div>
+                </div>
+             )}
+
+             {/* Delete Confirmation Modal */}
+             {deleteTargetId && (
+                <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white rounded-2xl p-6 shadow-2xl w-full max-w-sm text-center modal-enter">
+                        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+                            <i className="fa-solid fa-trash-can text-lg"></i>
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-800 mb-2">지출 내역 삭제</h3>
+                        <p className="text-sm text-slate-500 mb-6">선택한 내역을 정말 삭제하시겠습니까?<br/>삭제된 데이터는 복구할 수 없습니다.</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setDeleteTargetId(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold active:scale-95 transition-transform">취소</button>
+                            <button onClick={confirmDelete} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold shadow-md shadow-red-200 active:scale-95 transition-transform">삭제</button>
+                        </div>
+                    </div>
+                </div>
+             )}
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
     </script>
-</body>
+  </body>
 </html>
