@@ -1,0 +1,129 @@
+import React from 'react';
+import { MonthlySheet, FIXED_LABELS, PaymentMethod, PAYMENT_METHODS } from '../types';
+
+interface MonthlyPlannerProps {
+  sheet: MonthlySheet;
+  onUpdate: (newSheet: MonthlySheet) => void;
+}
+
+export const MonthlyPlanner: React.FC<MonthlyPlannerProps> = ({ sheet, onUpdate }) => {
+  
+  const handleIncomeChange = (field: keyof MonthlySheet['incomes'], value: number | string) => {
+    onUpdate({
+      ...sheet,
+      incomes: { ...sheet.incomes, [field]: Number(value) }
+    });
+  };
+
+  const handleFreeIncomeChange = (key: 'free1' | 'free2' | 'free3', field: 'desc' | 'amount', value: string | number) => {
+     onUpdate({
+      ...sheet,
+      incomes: { 
+          ...sheet.incomes, 
+          [key]: { ...sheet.incomes[key], [field]: field === 'amount' ? Number(value) : value } 
+      }
+    });
+  };
+
+  const handleFixedChange = (
+      key: keyof MonthlySheet['fixedExpenses'], 
+      field: 'amount' | 'method', 
+      value: string | number
+  ) => {
+      onUpdate({
+          ...sheet,
+          fixedExpenses: {
+              ...sheet.fixedExpenses,
+              [key]: {
+                  ...sheet.fixedExpenses[key],
+                  [field]: field === 'amount' ? Number(value) : value
+              }
+          }
+      });
+  };
+
+  const InputRow = ({ label, value, onChange }: { label: string, value: number, onChange: (v: number) => void }) => (
+    <div className="flex items-center justify-between py-2">
+      <label className="text-slate-600 text-sm font-medium">{label}</label>
+      <input 
+        type="number" 
+        value={value === 0 ? '' : value} 
+        onChange={e => onChange(Number(e.target.value))}
+        placeholder="0"
+        className="w-32 text-right p-2 rounded-lg border border-slate-200 focus:border-purple-500 focus:outline-none text-slate-800 bg-slate-50"
+      />
+    </div>
+  );
+
+  return (
+    <div className="space-y-6 pb-20">
+      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <h3 className="text-purple-600 font-bold text-lg mb-4 flex items-center gap-2">
+           <i className="fa-solid fa-coins"></i> 수입 설정
+        </h3>
+        <div className="space-y-1 divide-y divide-slate-50">
+           <InputRow label="💰 주수입" value={sheet.incomes.main} onChange={v => handleIncomeChange('main', v)} />
+           <InputRow label="🎁 기타수입" value={sheet.incomes.other} onChange={v => handleIncomeChange('other', v)} />
+           <InputRow label="🍚 정액급식비" value={sheet.incomes.meal} onChange={v => handleIncomeChange('meal', v)} />
+           <InputRow label="⏰ 초과수당" value={sheet.incomes.overtime} onChange={v => handleIncomeChange('overtime', v)} />
+           
+           {[1, 2, 3].map(i => {
+               const key = `free${i}` as 'free1' | 'free2' | 'free3';
+               return (
+                <div key={key} className="flex items-center gap-2 py-2">
+                    <span className="text-slate-400">✨</span>
+                    <input 
+                        type="text" 
+                        placeholder={`자유입력 ${i}`}
+                        value={sheet.incomes[key].desc}
+                        onChange={e => handleFreeIncomeChange(key, 'desc', e.target.value)}
+                        className="flex-1 text-sm p-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-purple-500 focus:outline-none"
+                    />
+                    <input 
+                        type="number" 
+                        placeholder="0"
+                        value={sheet.incomes[key].amount === 0 ? '' : sheet.incomes[key].amount}
+                        onChange={e => handleFreeIncomeChange(key, 'amount', e.target.value)}
+                        className="w-24 text-right p-2 rounded-lg border border-slate-200 bg-slate-50 focus:border-purple-500 focus:outline-none"
+                    />
+                </div>
+               )
+           })}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+        <h3 className="text-purple-600 font-bold text-lg mb-4 flex items-center gap-2">
+           <i className="fa-solid fa-receipt"></i> 고정 지출 설정
+        </h3>
+        <div className="space-y-4">
+            {(Object.entries(FIXED_LABELS) as [keyof MonthlySheet['fixedExpenses'], string][]).map(([key, label]) => (
+                <div key={key} className="bg-slate-50 p-3 rounded-xl">
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-slate-700 font-medium text-sm">{label}</span>
+                        <input 
+                            type="number"
+                            placeholder="0"
+                            value={sheet.fixedExpenses[key].amount === 0 ? '' : sheet.fixedExpenses[key].amount}
+                            onChange={(e) => handleFixedChange(key, 'amount', e.target.value)}
+                            className="w-28 text-right bg-white border border-slate-200 rounded p-1 text-sm"
+                        />
+                    </div>
+                    <div className="flex justify-end">
+                        <select 
+                            value={sheet.fixedExpenses[key].method}
+                            onChange={(e) => handleFixedChange(key, 'method', e.target.value)}
+                            className="text-xs p-1 bg-white border border-slate-200 rounded text-slate-500"
+                        >
+                            {PAYMENT_METHODS.map(m => (
+                                <option key={m} value={m}>{m === 'Lotte' ? '롯데' : m === 'Hyundai' ? '현대' : m === 'Shinhan' ? '신한' : m === 'Cash' ? '현금' : '체크'}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+};
